@@ -1,0 +1,20 @@
+{
+  "name": "scrape-zip-restuarant-website",
+  "version": "1.0.0",
+  "description": "It's for scraping a website, entering the zip code, and get the resturant info",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "anasite",
+  "license": "MIT",
+  "dependencies": {
+    "chai": "^4.3.7",
+    "express": "^4.18.2",
+    "mocha": "^10.2.0",
+    "node-fetch": "^3.3.0",
+    "pretty": "^2.0.0",
+    "puppeteer": "^19.4.1",
+    "selenium-webdriver": "^4.7.1"
+  }
+}
