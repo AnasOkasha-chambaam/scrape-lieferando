@@ -4,17 +4,21 @@
   "description": "It's for scraping a website, entering the zip code, and get the resturant info",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server"
   },
   "author": "anasite",
   "license": "MIT",
   "dependencies": {
     "chai": "^4.3.7",
+    "cloudflare-scraper": "^1.0.8",
     "express": "^4.18.2",
     "mocha": "^10.2.0",
     "node-fetch": "^3.3.0",
     "pretty": "^2.0.0",
     "puppeteer": "^19.4.1",
+    "puppeteer-extra": "^3.3.4",
+    "puppeteer-extra-plugin-stealth": "^2.11.1",
     "selenium-webdriver": "^4.7.1"
   }
 }
