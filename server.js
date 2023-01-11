@@ -1,6 +1,7 @@
 const puppeteer = require("puppeteer-extra");
 const fs = require("fs");
 let env = require("dotenv");
+const { Condition } = require("selenium-webdriver");
 
 env.config({ path: "./variables.env" });
 console.log("ch-p", process.env.CHROME_PATH);
@@ -20,7 +21,14 @@ puppeteer.use(require("puppeteer-extra-plugin-stealth")());
   const testUrl =
     "https://www.lieferando.at/lieferservice/essen/" + process.env.ZIP_CODE;
   await page.goto(testUrl, { waitUntil: "networkidle0", timeout: 0 });
-  await page.waitForTimeout(15000);
+  await page.waitForTimeout(5000);
+  await page.evaluate(async () => {
+    console.log("Start Scrolling");
+    await window.scrollTo({ top: 9 * 100000, behavior: "smooth" });
+    await window.scrollTo({ top: 9 * 100000, behavior: "smooth" });
+  });
+  await page.waitForTimeout(1000);
+  await page.waitForSelector("[data-qa=link]"); // Link
   await page.waitForSelector("[data-qa=restaurant-info-name]"); // name
   await page.waitForSelector("[data-qa=restaurant-rating-score]"); // rating
   await page.waitForSelector("[data-qa=restaurant-rating-votes]");
@@ -32,44 +40,202 @@ puppeteer.use(require("puppeteer-extra-plugin-stealth")());
   await page.waitForSelector("img._1xp4W");
 
   console.log("Heyy");
-  let restaurants = await page.evaluate(() => {
+  let restaurants = await page.evaluate(async () => {
+    let restaurants = ["blank"];
     console.log("We are in...");
-    let restaurants = [];
-    let toGet = [
-      ["name", "._50YZr._3Maaj[data-qa=restaurant-info-name]"],
-      ["rating_score", "._3Imuh._1imAt[data-qa=restaurant-rating-score]"],
-      ["votes", "._3Imuh[data-qa=restaurant-rating-votes]"],
-      ["mov", "._3Imuh[data-qa=mov-indicator-content]"],
-      [
-        "cost",
-        "._3Imuh[data-qa=delivery-costs-indicator-content]",
-        ["shipping_time", "._3Imuh[data-qa=shipping-time-indicator-content]"],
-      ],
-      ["cuisines", "._3jA7k._2THKE[data-qa=restaurant-cuisines]"],
-      ["logo", "[data-qa=avatar] [data-qa=picture] img._1xp4W"],
-    ];
-
-    for (let i = 0; i < toGet.length; i++) {
-      let infoText = [...document.querySelectorAll(toGet[i][1])];
-      for (let x = 0; x < infoText.length; x++) {
-        restaurants[x] = restaurants[x] || {};
-        console.log(infoText[x]);
-        if (toGet[i][0] === "logo") {
-          restaurants[x][toGet[i][0]] = infoText[x].src;
-          infoText[x].style.opacity = "0 !important";
-        } else {
-          restaurants[x][toGet[i][0]] = infoText[x].innerText;
-          infoText[x].style.background = "orange !important";
-        }
-      }
+    console.log(true);
+    restaurants = await [...document.querySelectorAll("[data-qa=link]")];
+    for (let i = 0; i < restaurants.length; i++) {
+      restaurants[i] = await { index: i + 1, link: restaurants[i].href };
     }
-
-    console.log(restaurants);
     return restaurants;
   });
 
+  // loop through restaurants
+  for (let i = 0; i < restaurants.length; i++) {
+    // fetch info of each restaurant (excluding alcoholics)
+    let newPage = await browser.newPage();
+    await newPage.goto(restaurants[i].link, {
+      waitUntil: "networkidle0",
+      timeout: 0,
+    });
+    newPage.waitForTimeout(1000);
+    await newPage.evaluate(async () => {
+      for (
+        let i = 0;
+        i < document.documentElement.scrollHeight;
+        i += (window.innerHeight * 2) / 3
+      ) {
+        window.scrollTo({ top: 10 * i, behavior: "smooth" });
+      }
+    });
+    newPage.waitForTimeout(2000);
+    await newPage.waitForSelector(
+      "[data-qa=restaurant-header] [data-qa=flex] div:first-child div:first-child"
+    );
+    let singleResturant = {
+      i,
+      name: await newPage.evaluate(async () => {
+        let element = document.querySelectorAll(
+          "[data-qa=restaurant-header] [data-qa=flex] div:first-child div:first-child"
+        )[0].innerText;
+        console.log(element);
+        return element;
+      }),
+      logo: await newPage.evaluate(() => {
+        return document.querySelectorAll(
+          "[data-qa=avatar] [data-qa=picture] img"
+        )[0].src;
+      }),
+      info: "",
+      meals: {
+        category: "",
+      },
+    };
+
+    singleResturant.meals = await newPage.evaluate(() => {
+      let meals = {};
+      let currentCateg = document.querySelectorAll(
+        "[data-qa=menu-list] [data-qa=popular-items] [data-qa=popular-items-header-info]"
+      )[0].innerText;
+      meals[currentCateg] = {
+        categoryName: currentCateg,
+        categoryDescription: "popular meals",
+        items: [],
+      };
+      [
+        ...document.querySelectorAll(
+          "[data-qa=menu-list] [data-qa=popular-items] [data-qa=popular-items-list] [data-qa=item] [data-qa=item-element]"
+        ),
+      ].forEach((item, i) => {
+        if ([...item.querySelectorAll("[data-qa=util] svg")].length === 1) {
+          meals[currentCateg].items.push({
+            name: item.querySelector(
+              "[data-qa=util] [data-qa=flex] h3[data-qa=heading]"
+            )
+              ? item.querySelector(
+                  "[data-qa=util] [data-qa=flex] h3[data-qa=heading]"
+                ).innerText
+              : "",
+            description: item.querySelectorAll("[data-qa=flex]")[0]
+              ? item
+                  .querySelectorAll("[data-qa=flex]")[0]
+                  .innerText.split(/\r?\n|\r|\n/g)
+                  .slice(0, -1)
+                  .join("\r\n")
+              : "",
+            price: item.querySelectorAll("[data-qa=flex]")[0]
+              ? item
+                  .querySelectorAll("[data-qa=flex]")[0]
+                  .innerText.split(/\r?\n|\r|\n/g)[
+                  item
+                    .querySelectorAll("[data-qa=flex]")[0]
+                    .innerText.split(/\r?\n|\r|\n/g).length - 1
+                ]
+              : "",
+          });
+        }
+      });
+      [
+        ...document.querySelectorAll(
+          "[data-qa=menu-list] [data-qa=item-category]"
+        ),
+      ].forEach((category) => {
+        currentCateg = category.querySelector(
+          "[data-qa=util] > h2[data-qa=heading]"
+        )
+          ? category.querySelector("[data-qa=util] > h2[data-qa=heading]")
+              .innerText
+          : "";
+        if (
+          !currentCateg.startsWith("Alkoh") &&
+          !currentCateg.startsWith("Alcoh")
+        ) {
+          meals[currentCateg] = {
+            categoryName: currentCateg,
+            categoryDescription: category.querySelector(
+              "[data-qa=util] [data-qa=item-category-description]"
+            )
+              ? category.querySelector(
+                  "[data-qa=util] [data-qa=item-category-description]"
+                ).innerText
+              : "",
+            items: [],
+          };
+          [...category.querySelectorAll("[data-qa=item-element]")].forEach(
+            (item) => {
+              if (
+                [...item.querySelectorAll("[data-qa=util] svg")].length === 1
+              ) {
+                meals[currentCateg].items.push({
+                  name: item.querySelector(
+                    "[data-qa=util] [data-qa=flex] h3[data-qa=heading]"
+                  )
+                    ? item.querySelector(
+                        "[data-qa=util] [data-qa=flex] h3[data-qa=heading]"
+                      ).innerText
+                    : "",
+                  description: item.querySelectorAll("[data-qa=flex]")[0]
+                    ? item
+                        .querySelectorAll("[data-qa=flex]")[0]
+                        .innerText.split(/\r?\n|\r|\n/g)
+                        .slice(0, -1)
+                        .join("\r\n")
+                    : "",
+                  price: item.querySelectorAll("[data-qa=flex]")[0]
+                    ? item
+                        .querySelectorAll("[data-qa=flex]")[0]
+                        .innerText.split(/\r?\n|\r|\n/g)[
+                        item
+                          .querySelectorAll("[data-qa=flex]")[0]
+                          .innerText.split(/\r?\n|\r|\n/g).length - 1
+                      ]
+                    : "",
+                });
+              }
+            }
+          );
+        }
+      });
+      return meals;
+    });
+
+    // to get address
+
+    await newPage.waitForTimeout(200);
+    await newPage.evaluate(() => {
+      document.querySelector("[data-qa=restaurant-header-action-info]").click();
+    });
+    // await newPage.close();
+    newPage.waitForSelector(
+      "[data-qa=restaurant-info-modal-info-address-element]"
+    );
+    await newPage.waitForTimeout(1000);
+    singleResturant.info = await newPage.evaluate(() => {
+      let info = [];
+      [
+        ...document.querySelectorAll(
+          "[data-qa=restaurant-info-modal-info-address-element] > div > div > *"
+        ),
+      ].forEach((one) => {
+        info.push(one.innerText);
+        console.log(one.innerText);
+      });
+      console.log(info);
+      return info;
+    });
+
+    // await infoPage.close();
+    console.log(JSON.stringify(singleResturant, null, 2));
+    // final merge
+    restaurants[singleResturant.i] = {
+      ...restaurants[singleResturant.i],
+      ...singleResturant,
+    };
+  }
+
   fs.writeFile(
-    "restaurants.json",
+    "restaurants_" + process.env.ZIP_CODE + ".json",
     JSON.stringify({ 8121: restaurants }, null, 2),
     "utf8",
     function (err) {
@@ -77,7 +243,9 @@ puppeteer.use(require("puppeteer-extra-plugin-stealth")());
         return console.log(err);
       }
       console.log(
-        "The data has been scraped and saved successfully! View it at './restaurants.json'"
+        "The data has been scraped and saved successfully! View it at './restaurants_" +
+          process.env.ZIP_CODE +
+          ".json'"
       );
     }
   );
