@@ -1,6 +1,7 @@
 const puppeteer = require("puppeteer-extra");
 const fs = require("fs");
 let env = require("dotenv");
+let oldJson = require("./restaurants.json");
 const { Condition } = require("selenium-webdriver");
 
 env.config({ path: "./variables.env" });
@@ -40,6 +41,7 @@ puppeteer.use(require("puppeteer-extra-plugin-stealth")());
   await page.waitForSelector("img._1xp4W");
 
   console.log("Heyy");
+  let allRestaurants = {};
   let restaurants = await page.evaluate(async () => {
     let restaurants = ["blank"];
     console.log("We are in...");
@@ -59,7 +61,7 @@ puppeteer.use(require("puppeteer-extra-plugin-stealth")());
       waitUntil: "networkidle0",
       timeout: 0,
     });
-    newPage.waitForTimeout(1000);
+    await newPage.waitForTimeout(1000);
     await newPage.evaluate(async () => {
       for (
         let i = 0;
@@ -69,7 +71,7 @@ puppeteer.use(require("puppeteer-extra-plugin-stealth")());
         window.scrollTo({ top: 10 * i, behavior: "smooth" });
       }
     });
-    newPage.waitForTimeout(2000);
+    await newPage.waitForTimeout(900);
     await newPage.waitForSelector(
       "[data-qa=restaurant-header] [data-qa=flex] div:first-child div:first-child"
     );
@@ -210,7 +212,7 @@ puppeteer.use(require("puppeteer-extra-plugin-stealth")());
     newPage.waitForSelector(
       "[data-qa=restaurant-info-modal-info-address-element]"
     );
-    await newPage.waitForTimeout(1000);
+    await newPage.waitForTimeout(900);
     singleResturant.info = await newPage.evaluate(() => {
       let info = [];
       [
@@ -226,27 +228,35 @@ puppeteer.use(require("puppeteer-extra-plugin-stealth")());
     });
 
     // await infoPage.close();
-    console.log(JSON.stringify(singleResturant, null, 2));
     // final merge
     restaurants[singleResturant.i] = {
       ...restaurants[singleResturant.i],
       ...singleResturant,
     };
+    allRestaurants[
+      singleResturant.name
+        .replace(/[^a-zA-Z ]/g, "")
+        .split(" ")
+        .join("")
+        .toLowerCase()
+    ] = singleResturant;
   }
 
+  let lastVersion = oldJson || { zipcodes: {}, restaurants: {} };
+  lastVersion.zipcodes[`${process.env.ZIP_CODE}`] = restaurants;
+  lastVersion.restaurants = { ...lastVersion.restaurants, ...allRestaurants };
   fs.writeFile(
-    "restaurants_" + process.env.ZIP_CODE + ".json",
-    JSON.stringify({ 8121: restaurants }, null, 2),
+    "restaurants.json",
+    JSON.stringify(lastVersion, null, 2),
     "utf8",
     function (err) {
       if (err) {
         return console.log(err);
       }
       console.log(
-        "The data has been scraped and saved successfully! View it at './restaurants_" +
-          process.env.ZIP_CODE +
-          ".json'"
+        "The data has been scraped and saved successfully! View it at './restaurants.json'."
       );
+      console.log("Restaurants of " + process.env.ZIP_CODE + " were added!.");
     }
   );
 
