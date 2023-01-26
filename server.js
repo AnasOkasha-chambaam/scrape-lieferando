@@ -15,6 +15,7 @@ puppeteer.use(require("puppeteer-extra-plugin-stealth")());
     // ignoreHTTPSErrors: true,
     args: ["--no-sandbox"],
     headless: false,
+    // headless: true,
   });
   const page = await browser.newPage();
 
@@ -36,7 +37,7 @@ puppeteer.use(require("puppeteer-extra-plugin-stealth")());
   // await page.waitForSelector("[data-qa=mov-indicator-content]");
   // await page.waitForSelector("[data-qa=delivery-costs-indicator-content]");
   // await page.waitForSelector("[data-qa=shipping-time-indicator-content]");
-  await page.waitForSelector("[data-qa=restaurant-cuisines]");
+  // await page.waitForSelector("[data-qa=restaurant-cuisines]");
   await page.waitForSelector("[data-qa=picture]");
   await page.waitForSelector("img._1xp4W");
 
@@ -80,7 +81,11 @@ puppeteer.use(require("puppeteer-extra-plugin-stealth")());
       name: await newPage.evaluate(async () => {
         let element = document.querySelectorAll(
           "[data-qa=restaurant-header] [data-qa=flex] div:first-child div:first-child"
-        )[0].innerText;
+        )[0]
+          ? document.querySelectorAll(
+              "[data-qa=restaurant-header] [data-qa=flex] div:first-child div:first-child"
+            )[0].innerText
+          : "";
         console.log(element);
         return element;
       }),
@@ -93,13 +98,18 @@ puppeteer.use(require("puppeteer-extra-plugin-stealth")());
       meals: {
         category: "",
       },
+      link: restaurants[i].link,
     };
 
     singleResturant.meals = await newPage.evaluate(() => {
       let meals = {};
       let currentCateg = document.querySelectorAll(
         "[data-qa=menu-list] [data-qa=popular-items] [data-qa=popular-items-header-info]"
-      )[0].innerText;
+      )[0]
+        ? document.querySelectorAll(
+            "[data-qa=menu-list] [data-qa=popular-items] [data-qa=popular-items-header-info]"
+          )[0].innerText
+        : "";
       meals[currentCateg] = {
         categoryName: currentCateg,
         categoryDescription: "popular meals",
@@ -220,8 +230,10 @@ puppeteer.use(require("puppeteer-extra-plugin-stealth")());
           "[data-qa=restaurant-info-modal-info-address-element] > div > div > *"
         ),
       ].forEach((one) => {
-        info.push(one.innerText);
-        console.log(one.innerText);
+        if (one && one.innerText) {
+          info.push(one.innerText);
+          console.log(one.innerText);
+        }
       });
       console.log(info);
       return info;
@@ -244,7 +256,7 @@ puppeteer.use(require("puppeteer-extra-plugin-stealth")());
 
   let lastVersion = oldJson || { zipcodes: {}, restaurants: {} };
   lastVersion.zipcodes[`${process.env.ZIP_CODE}`] = restaurants;
-  lastVersion.restaurants = { ...lastVersion.restaurants, ...allRestaurants };
+  lastVersion.restaurants = { ...allRestaurants, ...lastVersion.restaurants };
   fs.writeFile(
     "restaurants.json",
     JSON.stringify(lastVersion, null, 2),
